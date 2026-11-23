@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>База Данных · Кортекс: Под Сводом</title>
+<link rel="icon" type="image/jpeg" href="online-avatar.jpg">
+<link rel="apple-touch-icon" href="online-avatar.jpg">
+<style>
+  @font-face {
+    font-family: 'Share Tech Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('share-tech-mono.woff2') format('woff2');
+  }
+
+  :root {
+    --bg: #050608;
+    --panel: rgba(16, 18, 24, 0.9);
+    --card-bg: rgba(11, 13, 18, 0.85);
+    --border: #2a2d36;
+    --gold: #d4a324;
+    --gold-dim: rgba(212, 163, 36, 0.15);
+    --cyan: #00e5ff;
+    --purple: #d902ee;
+    --red: #ff4444;
+    --green: #2ecc71;
+    --text: #e0e2e8;
+    --muted: #9398a6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: var(--bg);
+    background-image: radial-gradient(circle at 50% 0%, #11141f 0%, #050608 75%);
+    color: var(--text);
+    font-family: 'Segoe UI', sans-serif;
+    line-height: 1.6;
+  }
+
+  /* ФОН САЙТА: город (файл лежит в www/) */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(180deg, rgba(5, 6, 8, 0.55) 0%, rgba(5, 6, 8, 0.85) 60%, #050608 100%),
+      url('images.jpg') center bottom / cover no-repeat;
+    pointer-events: none;
+  }
+
+  .mono { font-family: 'Share Tech Mono', monospace; }
+
+  /* ШАПКА */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(5, 6, 8, 0.96);
+    border-bottom: 1px solid var(--border);
+    padding: 15px 5%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: #fff;
+    font-weight: 900;
+    letter-spacing: 2px;
+    font-size: 18px;
+    text-transform: uppercase;
+  }
+
+  .logo-core {
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--gold) url('online-avatar.jpg') center / cover no-repeat;
+    box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(212, 163, 36, 0.6);
+  }
+
+  nav { display: flex; gap: 10px; }
+
+  .nav-link {
+    text-decoration: none;
+    color: var(--muted);
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+
+  .nav-link:hover, .nav-link.active {
+    color: #fff;
+    border-color: var(--gold);
+    background: var(--gold-dim);
+  }
+  .nav-link.active { color: var(--gold); }
+
+  /* КОНТЕЙНЕР ВИКИ */
+  .wiki-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 35px 5% 80px;
+  }
+
+  .terminal-header {
+    border-left: 4px solid var(--gold);
+    padding-left: 18px;
+    margin-bottom: 25px;
+  }
+
+  .terminal-header h1 {
+    font-size: 28px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .terminal-header p {
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 5px;
+  }
+
+  /* ПОИСК И ВКЛАДКИ */
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 30px;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 12px 18px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-input:focus { border-color: var(--gold); }
+
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tab-btn {
+    padding: 10px 18px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+
+  .tab-btn:hover { color: #fff; border-color: #555; }
+  .tab-btn.active {
+    background: var(--gold);
+    color: #0b0c10;
+    border-color: var(--gold);
+  }
+
+  /* КАРТОЧКИ СТАТЕЙ */
+  .wiki-section { display: none; }
+  .wiki-section.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .group-title {
+    font-size: 18px;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin: 25px 0 15px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 18px;
+  }
+
+  .entry {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px;
+    border-left: 3px solid var(--gold);
+  }
+
+  .entry.danger { border-left-color: var(--red); }
+  .entry.law { border-left-color: var(--green); }
+  .entry.cyber { border-left-color: var(--purple); }
+  .entry.cyan { border-left-color: var(--cyan); }
+  .entry.brown { border-left-color: #a0522d; }
+  .entry.gray  { border-left-color: #8b949e; }
+  .entry.orange { border-left-color: #ff7b00; }
+  
+  .entry-badge {
+    display: inline-block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .entry.danger .entry-badge { color: var(--red); }
+  .entry.law .entry-badge { color: var(--green); }
+  .entry.cyber .entry-badge { color: var(--purple); }
+  .entry.cyan .entry-badge { color: var(--cyan); }
+
+  .entry h3 {
+    font-size: 18px;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .entry p {
+    font-size: 13.5px;
+    color: #c1c2c5;
+    margin-bottom: 8px;
+  }
+
+  .entry p:last-child { margin-bottom: 0; }
+
+  .meta-list {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #1f222b;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+
+  .meta-list div { margin-bottom: 4px; }
+  .meta-list strong { color: #e0e2e8; }
+
+  .strikethrough {
+    text-decoration: line-through;
+    opacity: 0.55;
+  }
+
+  #no-results {
+    display: none;
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="index.html" class="logo">
+    <span class="logo-core"></span>
+    Кортекс: Под Сводом
+  </a>
+  <nav>
+    <a href="index.html" class="nav-link">Главная</a>
+    <a href="map.html" class="nav-link">Карта Мегаполиса</a>
+    <a href="wiki.html" class="nav-link active">База Данных (Вики)</a>
+  </nav>
+</header>
+
+<div class="wiki-container">
+  <div class="terminal-header">
+    <div class="mono" style="color: var(--green); font-size: 12px; margin-bottom: 4px;">[ДОСТУП: ОТКРЫТЫЙ // АРХИВЫ АРХИТЕКТОРА]</div>
+    <h1>База данных: Мегаполис-12</h1>
+    <p>Реестр корпораций, криминальных синдикатов, антропология и своды законов, удерживающие город на плаву.</p>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="wiki-search" class="search-input mono" placeholder="Поиск по базе данных (например: Арбитеры, Якудза, Ангелы, Табу, ARC)..." onkeyup="filterWiki()">
+    <div class="tabs" id="tabs-bar">
+      <button class="tab-btn active" onclick="switchTab('world', this)">🌐 Мир и Ярусы</button>
+      <button class="tab-btn" onclick="switchTab('codex', this)">⚖️ Табу и Законы</button>
+      <button class="tab-btn" onclick="switchTab('races', this)">🧬 Расы</button>
+      <button class="tab-btn" onclick="switchTab('corps', this)">🏢 Корпорации</button>
+      <button class="tab-btn" onclick="switchTab('gangs', this)">🩸 Синдикаты и Банды</button>
+    </div>
+  </div>
+
+  <div id="no-results" class="mono">ЗАПРОС НЕ ДАЛ РЕЗУЛЬТАТОВ В АРХИВАХ АРХИТЕКТОРА.</div>
+
+  <!-- ВКЛАДКА 1: МИР И ЯРУСЫ -->
+  <div id="tab-world" class="wiki-section active">
+    <h2 class="group-title mono">Устройство Мегаполиса-12</h2>
+    <div class="cards-grid">
+      <div class="entry danger">
+        <span class="entry-badge mono">ВЕРХОВНАЯ ВЛАСТЬ</span>
+        <h3>«Глава» и Триглав</h3>
+        <p>Мир управляется корпоративной диктатурой во главе с загадочным «Главой» — ИИ-Архитектором, который через теневые протоколы сталкивает и балансирует три ключевые мегакорпорации (Корп A, B и C).</p>
+      </div>
+      <div class="entry orange">
+        <span class="entry-badge mono">ИСТОЧНИК ЖИЗНИ</span>
+        <h3>Термоядерное Ядро</h3>
+        <p>Колоссальное искусственное солнце в центре города — оно же ядро планеты. Раньше были циклы и перезагрузки. Сейчас перезагрузок нет, но появились временные циклы: с утра до ночи — 36 ч. День — 18 ч, ночь — 18 ч.</p>
+      </div>
+      <div class="entry cyan">
+        <span class="entry-badge mono">ТЕРРИТОРИАЛЬНОЕ ДЕЛЕНИЕ</span>
+        <h3>Крылья и Гнёзда (Верхний ярус)</h3>
+        <p>Крылья — 12 правящих корпораций со своей территорией и стилем. Гнёзда — их стерильные хай-тек кварталы для элиты и персонала. Слежка Corp C тотальна, периметр охраняют автоматические системы. Однако с недавних пор закон о жёсткой миграции был отменён, и жители трущоб могут приезжать на верхний ярус. Правда, кому-то может не понравиться, что в верхнем ярусе ошиваются бродяги.</p>
+      </div>
+      <div class="entry brown">
+        <span class="entry-badge mono">НИЖНИЙ ЯРУС</span>
+        <h3>Подворотни</h3>
+        <p>Криминальные трущобы, задыхающиеся от смога. Слежки нет вообще. Закон диктуют банды, но большинство жителей — обычные рабочие и фиксеры. Жизнь дешева, выживание зависит от умения приспосабливаться.</p>
+      </div>
+      <div class="entry cyber">
+        <span class="entry-badge mono">ЦИФРОВОЕ ПРОСТРАНСТВО</span>
+        <h3>Киберсеть и Чёрный Заслон</h3>
+        <p>Пространство для нетраннеров, взломов и поиска данных. Главная угроза — Чёрный Заслон, за которым заперты дикие искины, пытающиеся прорваться внутрь. Нахождение за Заслоном означает мгновенную смерть.</p>
+      </div>
+      <div class="entry gray">
+        <span class="entry-badge mono">ТРАНСПОРТ</span>
+        <h3>Монорельсы</h3>
+        <p>С недавних пор по всему мегаполису появились монорельсы, которые опоясывают весь город. Это единственный способ попасть на верхний ярус. Их построила корпорация Meridian Transit после снятия закона о жёсткой миграции. Стоимость проезда между трущобами и верхним ярусом — 100 кредитов, по самому городу — 50 кредитов.</p>  
+      </div>
+      <div class="entry law">
+        <span class="entry-badge mono">ЭКОНОМИКА</span>
+        <h3>Валюта</h3>
+        <p>Архитектором утверждено, что валюта в Мегаполисе-12 — кредиты. Их можно хранить как наличными (полузолотые, на ощупь как гладкая бумага), так и в цифровом виде или на сильно зашифрованном чипе.</p>
+      </div>
+    </div>
+
+    <h2 class="group-title mono">Внешние угрозы и окраины</h2>
+    <div class="cards-grid">
+      <div class="entry danger">
+        <span class="entry-badge mono">ЗА ЧЕРТОЙ ГОРОДА</span>
+        <h3>Смертоносная Пустошь</h3>
+        <p>Выжженная земля за пределами 12 секторов, заражённая радиацией, техногенными утечками, наномашинами и одичавшими аномалиями. Опасный, но крайне доходный источник артефактов для базаров.</p>
+      </div>
+      <div class="entry cyan">
+        <span class="entry-badge mono">ВОДНАЯ ГРАНИЦА</span>
+        <h3>Бескрайний Океан</h3>
+        <p>Кипящие бурями и молниями токсичные воды под контролем пиратских флотилий. После развала Старой Сети 20 лет назад здесь уцелели дикие искины, не попавшие за Чёрный Заслон.</p>
+      </div>
+      <div class="entry law">
+        <span class="entry-badge mono">СЕКТОР 7 / СЕКТОР 15</span>
+        <h3>Компания по вылазкам в пустоши (ARC)</h3>
+        <p>База рейнджеров и наёмников, которые отправляются в караваны за пределы купола ради славы, денег и охоты на аномалии.</p>
+      </div>
+      <div class="entry cyan">
+        <span class="entry-badge mono">СЕКТОР 14</span>
+        <h3>Старые доки</h3>
+        <p>Полузатопленные платформы в Океане с ржавыми кранами, нераскрытыми контейнерами и следами диких искинов. Добраться сюда можно только через штормовые воды.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">СЕКТОР 13</span>
+        <h3>Собачий Могильник</h3>
+        <p>Суверенная укреплённая зона в Пустоши, контролируемая тяжёлой военной полицией и головорезами с пулемётными роботами. Крайне опасное место, где остро нуждаются в услугах фиксеров.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ВКЛАДКА 2: ТАБУ И ЗАКОНЫ -->
+  <div id="tab-codex" class="wiki-section">
+    <h2 class="group-title mono" style="color: var(--red);">🚫 Табу Мегаполиса-12 (Нарушение = Смерть / Статус «Топливо»)</h2>
+    <div class="cards-grid">
+      <div class="entry danger">
+        <span class="entry-badge mono">ТАБУ №1</span>
+        <h3>Контроль мыслей</h3>
+        <p>Запрещены скрытые подсети, глушилки и шифрование мыслей. Spectrum Data Monitoring сканирует разум 24/7 в верхнем ярусе; в Подворотнях слежки нет.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">ТАБУ №2</span>
+        <h3>Нелегальные импланты</h3>
+        <p>Разрешены только софт и протезы по патентам Central Core Architecture. Нелегальные аугментации блокируются или выжигают нейросеть носителя.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">ТАБУ №3</span>
+        <h3>Противодействие Силе</h3>
+        <p>Сопротивление властям карается аннигиляцией: Арбитеры отключают сознание мыслью, а Когти ликвидируют цель на месте.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">ТАБУ №4</span>
+        <h3>Запрет эмпатии ИИ</h3>
+        <p>Синты со свободной волей вне закона и подлежат демонтажу, а их создателям полностью стирают личность.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">ТАБУ №5</span>
+        <h3>Утаивание топлива</h3>
+        <p>Все трупы обязаны сдаваться в шахты Ядра. Сокрытие тела приравнивается к краже энергии и карается зачисткой.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">ТАБУ №6</span>
+        <h3>Единый культ</h3>
+        <p>Разрешено только Христианство. Сожжение — единственный законный обряд, пепел отправляется в Ядро. Утаивание праха считается ересью, секты уничтожаются.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">ТАБУ №7</span>
+        <h3>Чёрный Заслон</h3>
+        <p>Находиться внутри Чёрного Заслона строжайше запрещено. Нарушение приводит к моментальной смерти.</p>
+      </div>
+    </div>
+
+    <h2 class="group-title mono" style="color: var(--green);">⚖️ Законы Верхнего Яруса (Караются лишением свободы и каторгой)</h2>
+    <div class="cards-grid">
+      <div class="entry law">
+        <span class="entry-badge mono">ДЕЙСТВУЮЩИЙ ЗАКОН</span>
+        <h3>Оборот оружия</h3>
+        <p>В Гнёздах разрешён только классический огнестрел. Оружие будущего (рейлганы, лазерные установки) запрещено — при обнаружении следует конфискация и крупный штраф.</p>
+      </div>
+      <div class="entry law">
+        <span class="entry-badge mono">ДЕЙСТВУЮЩИЙ ЗАКОН</span>
+        <h3>Подделка ID</h3>
+        <p>Использование чужой или поддельной ID-карты для проникновения в Гнёзда карается конфискацией, допросом у Арбитеров, а при отягчающих — отправкой на каторгу.</p>
+      </div>
+      <div class="entry law">
+        <span class="entry-badge mono">ДЕЙСТВУЮЩИЙ ЗАКОН</span>
+        <h3>Трудовой контракт</h3>
+        <p>Сотрудник Корпа юридически принадлежит корпорации на весь срок контракта. Односторонний разрыв влечёт статус «расходник» и немедленную депортацию в Подворотни.</p>
+      </div>
+      <div class="entry law">
+        <span class="entry-badge mono">ДЕЙСТВУЮЩИЙ ЗАКОН</span>
+        <h3>Несанкционированные собрания</h3>
+        <p>Любые протесты и агитация в Гнёздах без одобрения Corp M приводят к силовому разгону и аресту зачинщиков.</p>
+      </div>
+      <div class="entry">
+        <span class="entry-badge mono" style="color: var(--muted);">ЗАКОН ОТМЕНЁН</span>
+        <h3 class="strikethrough">Жёсткая миграция</h3>
+        <p class="strikethrough">Вход в Гнёзда закрыт без ID-карт, периметр под турелями, исключение — 40-часовое окно перезагрузки Ядра.</p>
+        <p style="color: var(--gold); font-size: 12px;">Статус: Данный закон был официально снят с верхнего яруса.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ВКЛАДКА 3: РАСЫ -->
+  <div id="tab-races" class="wiki-section">
+    <h2 class="group-title mono">Основные расы</h2>
+    <div class="cards-grid">
+      <div class="entry">
+        <span class="entry-badge mono">ЧИСТАЯ КРОВЬ</span>
+        <h3>Хомо сапиенс (Люди)</h3>
+        <p>Потомки тех, кто улетел с Земли и выжил на борту корабля. Единственные, кого не тронула мутация излучения и Экзо-энергии.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">НИЗЫ И ПУСТОШИ</span>
+        <h3>Демоны</h3>
+        <p>Мутанты низов и Пустошей, чью плоть исказило излучение.</p>
+        <div class="meta-list">
+          <div><strong>Особенности:</strong> плотная кожа, рога, высокая термоустойчивость.</div>
+          <div><strong>Социальный класс:</strong> рабочие, криминал.</div>
+        </div>
+      </div>
+      <div class="entry cyan">
+        <span class="entry-badge mono">ЭЛИТА ГНЁЗД</span>
+        <h3>Ангелы</h3>
+        <p>Потомки первых колонистов, чей организм переродился под аномальной Экзо-энергией ещё до постройки Мегаполиса — их мозг научился взаимодействовать с полями напрямую.</p>
+        <div class="meta-list">
+          <div><strong>Особенности:</strong> крылья-планеры, эмпатия, ОУЭ (Органическое управление Экзо-энергией).</div>
+          <div><strong>Социальный статус:</strong> элита верхнего яруса.</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="group-title mono">Побочные ветви и мутации</h2>
+    <div class="cards-grid">
+      <div class="entry">
+        <span class="entry-badge mono">«СПЯЩАЯ КРОВЬ»</span>
+        <h3>Родичи</h3>
+        <p>Люди со звериной кровью в жилах, избежавшие Первого Превращения. Обострённые чувства и скрытый инстинкт хищника делают их идеальными охотниками в неоновом мраке.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">ОДЕРЖИМЫЕ ПОРЧЕЙ</span>
+        <h3>Фоморы</h3>
+        <p>Одержимые духами порчи полулюди-полузвери, обладающие физической силой за десятерых, но обречённые гнить на каторжном дне.</p>
+      </div>
+      <div class="entry cyber">
+        <span class="entry-badge mono">ПЛОТЬ И КОД</span>
+        <h3>Синтеты и Техногены</h3>
+        <p>Неоновые химеры из плоти и машинного кода, собранные на кустарном софте в обход корпоративных запретов.</p>
+      </div>
+      <div class="entry cyan">
+        <span class="entry-badge mono">ПОРОЖДЕНИЯ КРАЯ</span>
+        <h3>Искажённые</h3>
+        <p>Мутанты, перекованные смертоносной Пустошью и токсичным Океаном — то, во что превращается живая плоть на самом краю выживания.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ВКЛАДКА 4: КОРПОРАЦИИ -->
+  <div id="tab-corps" class="wiki-section">
+    <h2 class="group-title mono">Триглав Мегакорпораций (Секторы 1–3)</h2>
+    <div class="cards-grid">
+      <div class="entry">
+        <span class="entry-badge mono">КОРП A · СЕКТОРЫ 1–3</span>
+        <h3>Central Core Architecture Ltd.</h3>
+        <p><em>«Плоть — устаревший черновик».</em></p>
+        <p>Центральный ИИ, утверждающий патенты на все легальные импланты и приоритеты распределения энергии. Для жителей города — невидимый и непререкаемый бог.</p>
+      </div>
+      <div class="entry danger">
+        <span class="entry-badge mono">КОРП B · СЕКТОРЫ 1–3</span>
+        <h3>Apex Security Directives Inc.</h3>
+        <p><em>«Порядок через силу».</em></p>
+        <p>Карательный корпус города и кузница Арбитеров и Когтей. Если бойцы Корпа B прибыли на точку — приказ на полную ликвидацию уже отдан.</p>
+      </div>
+      <div class="entry cyan">
+        <span class="entry-badge mono">КОРП C · СЕКТОРЫ 1–3</span>
+        <h3>Spectrum Data Monitoring Ltd.</h3>
+        <p><em>«Мысль не спрячешь».</em></p>
+        <p>Тотальный надзор верхнего яруса и штаб «Глаз». Сканирует мыслеформы, пульс и цифровые следы, вычисляя бунтарей ещё до совершения преступления.</p>
+      </div>
+    </div>
+
+    <h2 class="group-title mono">Отраслевые Крылья (Секторы 4–12)</h2>
+    <div class="cards-grid">
+      <div class="entry">
+        <span class="entry-badge mono">КОРП E · СЕКТОР 4</span>
+        <h3>Solaris Core Dynamics</h3>
+        <p><em>«Мы держим солнце в руках».</em> Обслуживание термоядерного Ядра, сбор тел на топливо и распределение энергии.</p>
+      </div>
+      <div class="entry law">
+        <span class="entry-badge mono">КОРП H · СЕКТОРЫ 5–6</span>
+        <h3>Verdant Harvest</h3>
+        <p><em>«Сад под бетоном».</em> Закрытая агро-гидропоника и производство продовольствия для элиты.</p>
+      </div>
+      <div class="entry cyan">
+        <span class="entry-badge mono">КОРП Q · СЕКТОРЫ 5–6</span>
+        <h3>AquaVita Biotech</h3>
+        <p><em>«Вода — новая нефть».</em> Очистка воды, водозабор и биореакторы города.</p>
+      </div>
+      <div class="entry">
+        <span class="entry-badge mono">КОРП T · СЕКТОРЫ 7–8</span>
+        <h3>Meridian Transit</h3>
+        <p><em>«Город движется нами».</em> Железнодорожная логистика, линии метро и грузовые магистрали.</p>
+      </div>
+      <div class="entry">
+        <span class="entry-badge mono">КОРП G · СЕКТОРЫ 7–8</span>
+        <h3>Volt Nexus</h3>
+        <p><em>«Свет, что не гаснет».</em> Резервные линии электропередач и городские узлы связи.</p>
+      </div>
+      <div class="entry cyber">
+        <span class="entry-badge mono">КОРП M · СЕКТОРЫ 9–10</span>
+        <h3>EchoWave Media</h3>
+        <p><em>«Правда, которую мы напишем».</em> Информационная монополия, СМИ и пропаганда Верхнего яруса.</p>
+      </div>
+      <div class="entry law">
+        <span class="entry-badge mono">КОРП V · СЕКТОРЫ 9–10</span>
+        <h3>NeoSoma Medical</h3>
+        <p><em>«Плоть под контролем».</em> Официальная медицина, фармацевтика и легальная кибернизация.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ВКЛАДКА 5: СИНДИКАТЫ -->
+  <div id="tab-gangs" class="wiki-section">
+    <h2 class="group-title mono">Криминальные силы Нижнего яруса и окраин</h2>
+    <div class="cards-grid">
+      <div class="entry">
+        <span class="entry-badge mono">СИНДИКАТ №1 · НЕО-ТОКИО</span>
+        <h3>Якудза (Клан Симадзу)</h3>
+        <p>Держат самый чистый и прибыльный кусок Нижнего яруса. Выстроили скрытый нейтралитет с Корпом B, выплачивая колоссальную дань Экзо-энергией. Контролируют подпольные казино и торговлю элитным нелегальным софтом.</p>
+        <div class="meta-list">
+          <div><strong>Хаб:</strong> Квартал «Синдзюку-12» (Сектор 12)</div>
+          <div><strong>Расы:</strong> Элита «Спящей крови», люди-перебежчики</div>
+          <div><strong>Дипломатия:</strong> Вражда с Пиратами и Сетевыми Дьяволами.</div>
+        </div>
+      </div>
+
+      <div class="entry danger">
+        <span class="entry-badge mono">СИНДИКАТ №2 · АНТИ-КОРПОРАТ</span>
+        <h3>Отшелушенные Собаки (The Peeled Dogs)</h3>
+        <p>Самая дикая группировка, объявившая Триглаву открытую войну. Перехватывают трупы до приезда чистильщиков Corp E, нарушая главное Табу Ядра, за что получили статус «Крайняя угроза».</p>
+        <div class="meta-list">
+          <div><strong>Хаб:</strong> Цитадель «Собачий могильник» (Сектор 13)</div>
+          <div><strong>Расы:</strong> Беженцы, антропоморфы, Искажённые, Демоны</div>
+          <div><strong>Дипломатия:</strong> Тесный союз с Демоническими Ружьями.</div>
+        </div>
+      </div>
+
+      <div class="entry danger">
+        <span class="entry-badge mono">СИНДИКАТ №3 · ОРУЖЕЙНЫЕ БАРОНЫ</span>
+        <h3>Демонические Ружья (Demon Guns)</h3>
+        <p>Засели в старых грузовых доках, превратив их в сталелитейную крепость. Производят запрещённые рейлганы, лазерные пушки и кустарные аугментации, способные пробить броню Когтей.</p>
+        <div class="meta-list">
+          <div><strong>Хаб:</strong> Литейный бастион у Океана (Сектор 6)</div>
+          <div><strong>Расы:</strong> Синтеты-беглецы, Техногены, отступники, Демоны</div>
+          <div><strong>Дипломатия:</strong> Союз с Отшелушенными Собаками и Пиратами.</div>
+        </div>
+      </div>
+
+      <div class="entry cyan">
+        <span class="entry-badge mono">ВНЕ ЗАКОНА · ОКЕАН</span>
+        <h3>Синдикат «Пираты»</h3>
+        <p>Вольная фракция, контролирующая токсичные воды за чертой купола. Охотятся за дрейфующими архивами Старой Сети и обменивают их на тяжёлые калибры.</p>
+        <div class="meta-list">
+          <div><strong>Хаб:</strong> Пиратский причал / Ржавые доки (Секторы 11, 14)</div>
+          <div><strong>Расы:</strong> Искажённые, Синтеты, навигаторы-изгои</div>
+          <div><strong>Дипломатия:</strong> Сотрудничество с Демоническими Ружьями; вражда с Якудзой.</div>
+        </div>
+      </div>
+
+      <div class="entry cyber">
+        <span class="entry-badge mono">КИБЕРПСИХИ · СЕТЬ-НОЛЬ</span>
+        <h3>Банда «Сетевые Дьяволы»</h3>
+        <p>Отбитые нелегальные нетраннеры. Добывают закрытую информацию с узлов через живых носителей, торгуют стимуляторами и превращают приступы киберпсихоза в боевое оружие.</p>
+        <div class="meta-list">
+          <div><strong>Хаб:</strong> Отстойник «Сеть-Ноль» (Сектор 1)</div>
+          <div><strong>Расы:</strong> Люди, Синтеты / Техногены</div>
+          <div><strong>Дипломатия:</strong> Острая вражда с Кланом Симадзу (Якудза).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function switchTab(tabId, btn) {
+    document.getElementById('wiki-search').value = '';
+    document.getElementById('no-results').style.display = 'none';
+    document.querySelectorAll('.entry').forEach(el => el.style.display = 'block');
+    document.querySelectorAll('.group-title').forEach(el => el.style.display = 'block');
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    document.querySelectorAll('.wiki-section').forEach(sec => sec.classList.remove('active'));
+    document.getElementById('tab-' + tabId).classList.add('active');
+  }
+
+  function filterWiki() {
+    const query = document.getElementById('wiki-search').value.toLowerCase().trim();
+    const sections = document.querySelectorAll('.wiki-section');
+    const entries = document.querySelectorAll('.entry');
+    const titles = document.querySelectorAll('.group-title');
+    const noRes = document.getElementById('no-results');
+
+    if (!query) {
+      entries.forEach(el => el.style.display = 'block');
+      titles.forEach(el => el.style.display = 'block');
+      noRes.style.display = 'none';
+      const activeBtn = document.querySelector('.tab-btn.active');
+      if (activeBtn) activeBtn.click();
+      return;
+    }
+
+    sections.forEach(sec => sec.classList.add('active'));
+    titles.forEach(t => t.style.display = 'none');
+
+    let foundCount = 0;
+    entries.forEach(entry => {
+      const text = entry.innerText.toLowerCase();
+      if (text.includes(query)) {
+        entry.style.display = 'block';
+        foundCount++;
+      } else {
+        entry.style.display = 'none';
+      }
+    });
+
+    noRes.style.display = foundCount === 0 ? 'block' : 'none';
+  }
+</script>
+</body>
+</html>

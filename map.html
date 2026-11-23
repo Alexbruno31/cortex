@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Мегаполис-12 · Карта города</title>
+<link rel="icon" type="image/jpeg" href="online-avatar.jpg">
+<link rel="apple-touch-icon" href="online-avatar.jpg">
+<style>
+  
+  body { margin:0; overflow:hidden; background:#050608; font-family:'Segoe UI',sans-serif; color:#fff; user-select:none; }
+
+  #map-container {
+    position:fixed; inset:0; display:flex; justify-content:center; align-items:center;
+    overflow:hidden;
+    background:
+      linear-gradient(rgba(5, 6, 8, 0.7), rgba(5, 6, 8, 0.85)),
+      url('images.jpg') center / cover no-repeat,
+      #050608;
+    cursor: grab;
+  }
+  #map-container:active { cursor: grabbing; }
+
+  svg#map {
+    width: 100vw; 
+    height: 100vh;
+    display: block;
+  }
+
+  /* ---------- СЛОИ ---------- */
+  #buildings-layer, #metro-layer, #labels-layer, #poi-layer,
+  #core-layer, #dome-layer, #gang-icons-layer { pointer-events:none; }
+
+  /* ---------- РАЙОНЫ ---------- */
+  .sector {
+    cursor:pointer;
+    transition: opacity .35s, filter .35s, stroke .35s, fill .35s;
+    stroke: #0a0b0f;
+    stroke-width: 4;
+    stroke-linejoin: round;
+  }
+  .sector:hover { filter: brightness(1.3); }
+  .sector.active { stroke:#d4a324; stroke-width:4; filter: brightness(1.25); }
+  .sector.dimmed { opacity:.15; }
+
+  /* ---------- МЕТРО ---------- */
+  .metro-line-bg { fill:none; stroke:#050608; stroke-width:9; stroke-linecap:round; stroke-linejoin:round; }
+  .metro-line { fill:none; stroke-width:4.5; stroke-linecap:round; stroke-linejoin:round; }
+  
+  .station { fill:#fff; stroke:#050608; stroke-width:2.5; }
+  .station-hub { fill:#fff; stroke:#050608; stroke-width:3; }
+
+  /* ---------- МАРКЕРЫ ---------- */
+  .poi-marker { transform-box: fill-box; transform-origin: center;
+                animation: popIn .35s cubic-bezier(.175,.885,.32,1.275) backwards; cursor:pointer; }
+  .poi-marker:hover { filter: brightness(1.3); }
+  @keyframes popIn { 0% { opacity:0; transform:scale(0); } 100% { opacity:1; transform:scale(1); } }
+
+  .pulse { transform-box: fill-box; transform-origin:center; animation: pulseRing 2s ease-out infinite; }
+  @keyframes pulseRing { 0% { transform:scale(.8); opacity:.8; } 100% { transform:scale(2.2); opacity:0; } }
+
+  /* ---------- КИБЕРСЕТЬ И ЗАСЛОН ---------- */
+  #cyber-zone, #black-curtain {
+    display: none;
+    transition: opacity 0.5s ease;
+    cursor: pointer;
+  }
+  
+  .cyber-text { fill: #d902ee; font-family: 'Courier New', monospace; font-weight: 900; text-anchor: middle; letter-spacing: 15px; filter: drop-shadow(0 0 15px #d902ee); pointer-events: none; }
+  .curtain-text { fill: #ff0000; font-family: 'Courier New', monospace; font-weight: 900; text-anchor: middle; letter-spacing: 8px; filter: drop-shadow(0 0 15px #ff0000); pointer-events: none; }
+
+  /* ---------- UI ---------- */
+  .layer-switch {
+    position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+    display:flex; gap:10px; z-index:10; background:rgba(20,22,28,.9);
+    padding:8px; border-radius:8px; border:1px solid #2a2d36; backdrop-filter:blur(10px);
+    cursor: default;
+  }
+  .layer-btn {
+    padding:10px 20px; background:transparent; border:1px solid #444; color:#888;
+    border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;
+    text-transform:uppercase; letter-spacing:1px; transition:all .2s; font-family:inherit;
+  }
+  .layer-btn:hover { background:rgba(255,255,255,.1); color:#fff; }
+  .layer-btn.active { background:#d4a324; color:#111; border-color:#d4a324; }
+
+  .codex-btn { border-color: #a35d1c; color: #e0e0e0; }
+  .codex-btn:hover { background: rgba(163, 93, 28, 0.2); border-color: #ff8c00; color: #ff8c00; }
+  
+  .law-box { background:rgba(0,0,0,0.4); padding:12px; border-radius:4px; margin-bottom:12px; border-left:3px solid #ff4444; }
+  .law-box h4 { margin:0 0 5px 0; color:#ff4444; font-size:12px; text-transform:uppercase; letter-spacing:1px; }
+  .law-box p { margin:0; font-size:12px; color:#c1c2c5; line-height:1.5; }
+  
+  .upper-law-box { border-left-color: #2ecc71; }
+  .upper-law-box h4 { color:#2ecc71; }
+
+  #info-panel {
+    position:fixed; top:20px; right:20px; width:360px;
+    background:rgba(13,14,18,.95); border:1px solid #2a2d36;
+    border-top:3px solid #d4a324; border-radius:6px; padding:20px;
+    box-shadow:0 10px 40px rgba(0,0,0,.9); backdrop-filter:blur(15px);
+    transform:translateX(420px); transition:transform .4s cubic-bezier(.4,0,.2,1);
+    z-index:20; max-height:calc(100vh - 40px); overflow-y:auto;
+    cursor: default;
+  }
+  #info-panel::-webkit-scrollbar { width:4px; }
+  #info-panel::-webkit-scrollbar-thumb { background:#333; }
+  #info-panel.show { transform:translateX(0); }
+
+  #wiki-link {
+    position:fixed; top:20px; left:20px; padding:10px 15px; z-index:10;
+    background:rgba(20,22,28,.9); border:1px solid #444; color:#a0a2a8;
+    border-radius:4px; font-size:12px; text-decoration:none; backdrop-filter:blur(10px);
+  }
+  #wiki-link:hover { border-color:#d4a324; color:#d4a324; }
+
+  #back-btn {
+    position:fixed; top:64px; left:20px; padding:10px 15px;
+    background:rgba(20,22,28,.9); border:1px solid #444; color:#a0a2a8;
+    border-radius:4px; cursor:pointer; font-size:12px; font-family:inherit;
+    display:none; z-index:10; backdrop-filter:blur(10px);
+  }
+  #back-btn:hover { border-color:#d4a324; color:#d4a324; }
+  #back-btn.show { display:block; }
+
+  #hint {
+    position:fixed; bottom:104px; left:50%; transform:translateX(-50%);
+    font-size:11px; color:#5a5f6b; letter-spacing:2px; text-transform:uppercase;
+    z-index:10; pointer-events:none; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div id="map-container">
+  <svg id="map" viewBox="0 0 10000 13000">
+    <defs>
+      <linearGradient id="waste-grad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"  stop-color="#140d07"/>
+        <stop offset="100%" stop-color="#2b1d12"/>
+      </linearGradient>
+      <linearGradient id="ocean-grad" x1="1" y1="0" x2="0" y2="0">
+        <stop offset="0%"  stop-color="#020e12"/>
+        <stop offset="100%" stop-color="#0b2b32"/>
+      </linearGradient>
+      
+      <linearGradient id="cyber-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1a0b2e" stop-opacity="0.9" />
+          <stop offset="100%" stop-color="#33124a" stop-opacity="1" />
+      </linearGradient>
+      <pattern id="cyber-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#d902ee" stroke-width="1.5" opacity="0.4"/>
+      </pattern>
+
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="4" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <clipPath id="city-clip"><path id="city-clip-path" d=""/></clipPath>
+    </defs>
+
+    <g id="world" transform="scale(10)">
+      <g transform="translate(0, -50)">
+        <g id="terrain"></g>
+        <g id="city-ground"></g>
+        <g id="city-visual">
+          <g id="sectors-layer"></g>
+          <g id="buildings-layer"></g>
+          <g id="gang-icons-layer"></g>
+        </g>
+        <g id="metro-layer"></g>
+        <g id="core-layer"></g>
+        <g id="labels-layer"></g>
+        <g id="poi-layer"></g>
+      </g>
+
+      <!-- КИБЕРСЕТЬ -->
+      <g id="cyber-zone">
+        <rect x="0" y="800" width="1000" height="350" fill="url(#cyber-grad)" />
+        <rect x="0" y="800" width="1000" height="350" fill="url(#cyber-grid)" />
+        <path d="M 0 800 L 1000 800" stroke="#d902ee" stroke-width="3" opacity="0.9"/>
+        <text x="500" y="980" class="cyber-text" font-size="50">КИБЕРСЕТЬ</text>
+      </g>
+
+      <!-- ЧЁРНЫЙ ЗАСЛОН -->
+      <g id="black-curtain">
+        <rect x="0" y="1150" width="1000" height="150" fill="#050000" />
+        <rect x="0" y="1150" width="1000" height="150" fill="url(#cyber-grid)" opacity="0.05" />
+        <path d="M 0 1150 L 1000 1150" stroke="#ff0000" stroke-width="5" opacity="0.9" />
+        <path d="M 0 1150 L 1000 1150" stroke="#ff0000" stroke-width="1.5" filter="url(#glow)" opacity="0.6" />
+        <text x="500" y="1210" class="curtain-text" font-size="32">ЧЁРНЫЙ ЗАСЛОН</text>
+        <text x="500" y="1250" class="curtain-text" font-size="16" fill="#ff4444" letter-spacing="6">ЗА ЧЁРНЫМ ЗАСЛОНОМ ТОЛЬКО ЛИШЬ СМЕРТЬ</text>
+      </g>
+    </g>
+  </svg>
+</div>
+
+<a id="wiki-link" href="wiki.html">← Назад в вики</a>
+<button id="back-btn" onclick="resetView()">← Сбросить вид</button>
+<div id="hint">Перетаскивайте карту ЛКМ · Колесико — зум</div>
+
+<div class="layer-switch">
+  <button class="layer-btn active" onclick="setLayer('upper', this)">Гнёзда</button>
+  <button class="layer-btn" onclick="setLayer('lower', this)">Подворотни</button>
+  <button class="layer-btn" onclick="setLayer('cyber', this)">Киберсеть</button>
+  <button class="layer-btn codex-btn" onclick="showCodex()">Кодекс</button>
+</div>
+
+<div id="info-panel"></div>
+
+<script>
+/* ==========================================================
+   ДАННЫЕ (ВНЕДРЕН ЛОР)
+   ========================================================== */
+const sectorColors = {
+  upper: {
+    1:'#364e6b', 2:'#364e6b', 3:'#364e6b',
+    4:'#2c4a3b', 5:'#2c4a3b', 6:'#2c4a3b',
+    7:'#544332', 8:'#544332',
+    9:'#3d2e4f', 10:'#3d2e4f',
+    11:'#552a32', 12:'#552a32',
+    13:'#332211', 14:'#112233', 15:'#4a3b2c'
+  },
+  lower: {
+    1:'#1f2329', 2:'#1f2329', 3:'#1f2329',
+    4:'#1c241c', 5:'#1c241c', 6:'#1c241c',
+    7:'#2a221c', 8:'#2a221c',
+    9:'#221c24', 10:'#221c24',
+    11:'#2b1a1c', 12:'#2b1a1c',
+    13:'#1f140a', 14:'#0a141f', 15:'#2a221c'
+  }
+};
+
+const sectorData = {
+  1:  { 
+    corp:"Central Core Architecture (Корп A)", name:"Сектор 1", 
+    lore:"Сердце Триглава. Центральный ИИ утверждает патенты и распределение энергии. Здесь находится штаб «Сетевых Дьяволов» — киберпсихов, превративших безумие в оружие.", 
+    physicalProt:"Турели с ИИ, отряды Арбитеров, лазерные сетки.",
+    cyberVuln:"Прямое подключение к Ядру (перегрев при взломе) и отстойник «Сеть-Ноль» с минимумом защиты.",
+    cyberProt:"Квантовая шифрация Ядра, но в отстойниках — только кустарные ICE-программы."
+  },
+  2:  { 
+    corp:"Apex Security Directives (Корп B)", name:"Сектор 2", 
+    lore:"Кузница Арбитеров и Когтей. «Порядок через силу». Карательный корпус, который отключает сознание мыслью.", 
+    physicalProt:"Патрули Когтей, силовые щиты, экзоскелеты.",
+    cyberVuln:"Открытые военные каналы для координации рейдов.",
+    cyberProt:"Защитные демоны-хищники военного класса."
+  },
+  3:  { 
+    corp:"Spectrum Data Monitoring (Корп C)", name:"Сектор 3", 
+    lore:"Штаб «Глаз». Тотальный надзор верхнего яруса. Сканирует мыслеформы и цифровые следы. «Мысль не спрячешь».", 
+    physicalProt:"Спутниковое прикрытие, стены с датчиками.",
+    cyberVuln:"Перегрузка сканеров при массовом сбросе данных.",
+    cyberProt:"Активное подавление сигнала, ИИ-фаерволы."
+  },
+  4:  { 
+    corp:"Solaris Core Dynamics (Корп E)", name:"Сектор 4", 
+    lore:"«Мы держим солнце в руках». Обслуживание Ядра и распределение энергии. Собирают трупы для топлива.", 
+    physicalProt:"Радиационные щиты, огнеупорные стены, дроны.",
+    cyberVuln:"Физический доступ к охлаждающим контурам реактора.",
+    cyberProt:"Автоматические системы пожаротушения и реле."
+  },
+  5:  { 
+    corp:"Verdant Harvest (Корп H)", name:"Сектор 5", 
+    lore:"«Сад под бетоном». Агро-гидропоника для элиты верхнего яруса.", 
+    physicalProt:"Стерильные боксы, дроны-опылители.",
+    cyberVuln:"Биологические носители (токсины в воде).",
+    cyberProt:"Биометрические сканеры и манипуляторы."
+  },
+  6:  { 
+    corp:"AquaVita Biotech / Логово «Демонических Ружей»", name:"Сектор 6", 
+    lore:"«Вода — новая нефть». Здесь же, в литейном бастионе, засели Демонические Ружья — оружейные бароны Подворотен, производящие рейлганы.", 
+    physicalProt:"Подводные дроны, герметичные шлюзы, турели синдиката.",
+    cyberVuln:"Клапаны сброса давления и старые протоколы литейных цехов.",
+    cyberProt:"Сонары, автономные торпеды, кустарные военные ICE."
+  },
+  7:  { 
+    corp:"Meridian Transit (Корп T) / ARC", name:"Сектор 7", 
+    lore:"«Город движется нами». Ж/д логистика. Здесь же базируется ARC — компания по вылазкам в пустоши для поиска славы и денег.", 
+    physicalProt:"Бронированные вагоны, штурмовые группы, караваны ARC.",
+    cyberVuln:"Устаревшие протоколы диспетчерских вышек.",
+    cyberProt:"Резервные аналоговые линии, скремблеры."
+  },
+  8:  { 
+    corp:"Volt Nexus (Корп G)", name:"Сектор 8", 
+    lore:"«Свет, что не гаснет». Резервные линии энергии и связи для города.", 
+    physicalProt:"Дублирующие сети, изолированные подстанции.",
+    cyberVuln:"Электромагнитные импульсы (ЭМИ).",
+    cyberProt:"Автоматические выключатели, роботы-электрики."
+  },
+  9:  { 
+    corp:"EchoWave Media (Корп M)", name:"Сектор 9", 
+    lore:"«Правда, которую мы напишем». Штаб пропаганды Гнёзд, промывка мозгов.", 
+    physicalProt:"Глушилки, дроны-наблюдатели.",
+    cyberVuln:"Прямые эфиры и незащищенные каналы вещания.",
+    cyberProt:"Шифрование потоков, фейковые сервера."
+  },
+  10: { 
+    corp:"NeoSoma Medical (Корп V)", name:"Сектор 10", 
+    lore:"«Плоть под контролем». Медицина и кибернизация элиты. Подпольные Риперы тоже обитают здесь.", 
+    physicalProt:"Биометрическая охрана, сканеры ДНК.",
+    cyberVuln:"Базы данных пациентов и нейро-импланты (бэкдоры).",
+    cyberProt:"Медицинские ИИ-демоны, карантинные протоколы."
+  },
+  11: { 
+    corp:"Синдикат «Пираты»", name:"Сектор 11", 
+    lore:"Пиратский причал. Морской разбой, свобода вне купола и контрабанда Старой Сети.", 
+    physicalProt:"Наёмники, самодельные ловушки, морские дроны.",
+    cyberVuln:"Хаотичная архитектура сетей, старые пиратские вышки.",
+    cyberProt:"Вирусы-ловушки, кустарные ICE-программы."
+  },
+  12: { 
+    corp:"Синдикат «Якудза» (Клан Симадзу)", name:"Сектор 12", 
+    lore:"Квартал «Синдзюку-12». Нео-Токио, строгая иерархия. Скрытый нейтралитет с Apex, торговля элитным нелегальным софтом.", 
+    physicalProt:"Элитные наёмники, кибер-самураи, неоновые казино.",
+    cyberVuln:"Хабы для торговли софтом, которые можно перехватить.",
+    cyberProt:"Лучшие нетраннеры клана, элитные ICE-программы."
+  },
+  13: {
+    corp:"Синдикат «Отшелушенные Собаки»", name:"Сектор 13", 
+    lore:"Собачий могильник. Суверенная зона в Пустоши. Крайняя угроза для Триглава. Перехватывают трупы до чистильщиков.", 
+    physicalProt:"Тяжёлые роботы с пулеметами, кустарные кибер-протезы, дроны.",
+    cyberVuln:"Отсутствие единой сети, ржавые военные протоколы.",
+    cyberProt:"Хаотичные пиратские вышки, ловушки."
+  },
+  14: {
+    corp:"Старые доки (Пираты)", name:"Сектор 14", 
+    lore:"Заброшенные корабли и ржавые платформы в Океане. Здесь обитают дикие искины и прячутся пираты.", 
+    physicalProt:"Автоматические турели на платформах, минные поля.",
+    cyberVuln:"Старые спутниковые тарелки, уязвимые для перехвата.",
+    cyberProt:"Морские дроны с лазерным наведением, остатки Старой Сети."
+  },
+  15: {
+    corp:"Компания по вылазкам в пустоши (ARC)", name:"Сектор 15", 
+    lore:"База рейнджеров на границе с Пустошью. Слава, деньги и способ умереть. Занимаются поиском аномалий и ресурсов.", 
+    physicalProt:"Караваны с тяжелой броней, наемники-ветераны.",
+    cyberVuln:"Открытые каналы для связи с караванами.",
+    cyberProt:"Мобильные серверные в бронемашинах, шифрование военного уровня."
+  }
+};
+
+const POI_DATA = {
+  upper: {
+    1: [ { name:"площадь-«паноптикум»", icon:"👁" }, { name:"штаб-квартиры", icon:"🏢" }, { name:"архив-архитектора", icon:"🧠" } ],
+    2: [ { name:"стальной-периметр", icon:"⚔️" }, { name:"блоки-«куб-стандарт»", icon:"🧱" } ],
+    3: [ { name:"спектр-наблюдения", icon:"📡" } ],
+    4: [ { name:"реактор-солариса", icon:"☀️" } ],
+    5: [ { name:"зелёный-бутон", icon:"🌿" }, { name:"оранжереи-ангелов", icon:"🕊" } ],
+    6: [ { name:"водный-контур", icon:"💧" } ],
+    7: [ { name:"меридиан-транзит", icon:"🚆" }, { name:"техно-проспект", icon:"🛣" } ],
+    8: [ { name:"вольтова-сеть", icon:"⚡" } ],
+    9: [ { name:"эхо-вещание", icon:"📻" }, { name:"экзо-театры", icon:"🎭" } ],
+    10:[ { name:"неосома-клиника", icon:"🏥" }, { name:"клиника-«санация»", icon:"💉" } ],
+    11:[ { name:"штаб-квартиры", icon:"🏢" } ],
+    12:[ { name:"небесные-гнезда", icon:"💎" }, { name:"техно-проспект", icon:"🛣" } ],
+    13:[ { name:"собачьи-бои", icon:"🐕" }, { name:"черный-рынок", icon:"🛒" } ],
+    14:[ { name:"старые-краны", icon:"🏗" }, { name:"ржавые-суда", icon:"🚢" } ],
+    15:[ { name:"лагерь-ARC", icon:"⛺" }, { name:"база-караванов", icon:"🚚" } ]
+  },
+  lower: {
+    1: [ { name:"притон-у-ядра", icon:"😈" }, { name:"отстойник-«сеть-ноль»", icon:"📡" } ],
+    2: [ { name:"«ржавое-гнездо»", icon:"🪹" }, { name:"«собачий-могильник»", icon:"💀" } ],
+    3: [ { name:"сетевые-узлы", icon:"🕸" } ],
+    4: [ { name:"черный-рынок", icon:"🛒" } ],
+    5: [ { name:"свалка", icon:"🗑" } ],
+    6: [ { name:"литейный-бастион", icon:"🔨" } ],
+    7: [ { name:"кибер-кафе", icon:"☕" } ],
+    8: [ { name:"квартал-красных-фонарей", icon:"🏮" } ],
+    9: [ { name:"экзо-театры", icon:"🎭" }, { name:"неоновые-казино", icon:"🎰" } ],
+    10:[ { name:"черный-рынок", icon:"🛒" }, { name:"сетевые-узлы", icon:"🕸" } ],
+    11:[ { name:"пиратский-причал", icon:"⚓" }, { name:"ржавые-доки", icon:"🚢" } ],
+    12:[ { name:"квартал-«синдикат-12»", icon:"💼" }, { name:"неоновые-казино", icon:"🎰" } ],
+    13:[ { name:"собачьи-бои", icon:"🐕" }, { name:"черный-рынок", icon:"🛒" } ],
+    14:[ { name:"старые-краны", icon:"🏗" }, { name:"ржавые-суда", icon:"🚢" } ],
+    15:[ { name:"лагерь-ARC", icon:"⛺" }, { name:"база-караванов", icon:"🚚" } ]
+  }
+};
+
+/* ==========================================================
+   УТИЛИТЫ
+   ========================================================== */
+const NS = 'http://www.w3.org/2000/svg';
+const CX = 500, CY = 500;
+
+function svg(tag, attrs){
+  const e = document.createElementNS(NS, tag);
+  if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rnd = mulberry32(20261116);
+const R = (a, b) => a + rnd() * (b - a);
+
+function inPoly(pt, poly){
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+    if (((yi > pt[1]) !== (yj > pt[1])) && (pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+function distSeg(p, a, b){
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const l2 = dx * dx + dy * dy;
+  let t = l2 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+
+function distToPolyEdge(pt, poly){
+  let m = Infinity;
+  for (let i = 0; i < poly.length; i++) m = Math.min(m, distSeg(pt, poly[i], poly[(i + 1) % poly.length]));
+  return m;
+}
+
+function distToPolyline(p, line){
+  let m = Infinity;
+  for (let i = 0; i < line.length - 1; i++) m = Math.min(m, distSeg(p, line[i], line[i + 1]));
+  return m;
+}
+
+function polyBounds(poly){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  poly.forEach(p => {
+    x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]);
+    x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]);
+  });
+  return [x0, y0, x1, y1];
+}
+
+function polyArea(poly){
+  let a = 0;
+  for (let i = 0; i < poly.length; i++){
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  return Math.abs(a / 2);
+}
+
+function polyPath(poly){
+  return 'M ' + poly.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L ') + ' Z';
+}
+
+/* ---------- Геометрия ---------- */
+const CITY = [
+  [890,500],[851,645],[762,762],[634,823],[500,830],[370,814],[245,755],[158,642],
+  [120,500],[158,358],[253,253],[370,186],[500,150],[638,167],[762,238],[851,355]
+];
+
+const SEEDS = [
+  [620,380], [500,240], [380,380], [690,260], [490,730], [630,610],
+  [290,690], [200,480], [320,275], [370,600], [800,470], [700,710]
+];
+
+const RIVER = [
+  [60,686],[180,694],[300,706],[400,728],[470,746],
+  [540,762],[600,780],[660,798],[720,818],[800,848],[880,880]
+];
+
+function clipHalfPlane(poly, A, B){
+  if (poly.length < 3) return poly;
+  const mx = (A[0] + B[0]) / 2, my = (A[1] + B[1]) / 2;
+  const nx = B[0] - A[0], ny = B[1] - A[1];
+  const side = p => (p[0] - mx) * nx + (p[1] - my) * ny;
+
+  const out = [];
+  for (let i = 0; i < poly.length; i++){
+    const cur = poly[i], nxt = poly[(i + 1) % poly.length];
+    const sc = side(cur), sn = side(nxt);
+    if (sc <= 0) out.push(cur);
+    if ((sc < 0 && sn > 0) || (sc > 0 && sn < 0)){
+      const t = sc / (sc - sn);
+      out.push([cur[0] + (nxt[0] - cur[0]) * t, cur[1] + (nxt[1] - cur[1]) * t]);
+    }
+  }
+  return out;
+}
+
+let cells = SEEDS.map((s, i) => {
+  let poly = CITY.map(p => p.slice());
+  for (let j = 0; j < SEEDS.length; j++){
+    if (j === i) continue;
+    poly = clipHalfPlane(poly, s, SEEDS[j]);
+  }
+  return poly;
+});
+
+// 13 - Собачий могильник (дальше в Пустошь)
+cells.push([[10, 150], [100, 180], [110, 450], [10, 450]]); 
+// 14 - Старые доки (Океан)
+cells.push([[880, 250], [980, 250], [980, 450], [880, 450]]); 
+// 15 - ARC (вплотную к 7-му со стороны Пустоши)
+cells.push([[10, 580], [90, 620], [140, 750], [10, 750]]); 
+
+function wobbleMid(a, b, amp){
+  const swap = (a[0] > b[0]) || (a[0] === b[0] && a[1] > b[1]);
+  const p1 = swap ? b : a, p2 = swap ? a : b;
+  const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const h = Math.sin(p1[0] * 12.9898 + p1[1] * 78.233 + p2[0] * 37.719 + p2[1] * 11.135) * 43758.5453;
+  const f = h - Math.floor(h);
+  return [
+    (p1[0] + p2[0]) / 2 + nx * (f - 0.5) * amp * 2,
+    (p1[1] + p2[1]) / 2 + ny * (f - 0.5) * amp * 2
+  ];
+}
+
+function cellPath(poly, amp = 4){
+  if (poly.length < 3) return '';
+  let d = `M ${poly[0][0].toFixed(1)} ${poly[0][1].toFixed(1)}`;
+  for (let i = 0; i < poly.length; i++){
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const m = wobbleMid(a, b, amp);
+    d += ` Q ${m[0].toFixed(1)} ${m[1].toFixed(1)} ${b[0].toFixed(1)} ${b[1].toFixed(1)}`;
+  }
+  return d + ' Z';
+}
+
+/* ==========================================================
+   ИНИЦИАЛИЗАЦИЯ
+   ========================================================== */
+const svgEl = document.getElementById('map');
+const terrainLayer   = document.getElementById('terrain');
+const groundLayer    = document.getElementById('city-ground');
+const sectorsLayer   = document.getElementById('sectors-layer');
+const buildingsLayer = document.getElementById('buildings-layer');
+const gangIconsLayer = document.getElementById('gang-icons-layer');
+const metroLayer     = document.getElementById('metro-layer');
+const coreLayer      = document.getElementById('core-layer');
+const labelsLayer    = document.getElementById('labels-layer');
+const poiLayer       = document.getElementById('poi-layer');
+
+let currentLayer = 'upper';
+let activeSector = null;
+
+function buildTerrain(){
+  const sea = [[866,0],[1000,0],[1000,1000],[626,810],[751,751],[837,639],[875,500],[837,361]];
+  terrainLayer.appendChild(svg('path', { d: polyPath(sea), fill: 'url(#ocean-grad)' }));
+  terrainLayer.appendChild(svg('path', { d: 'M 837 361 Q 875 500 837 639 Q 751 751 626 810', fill: 'none', stroke: 'rgba(0,229,255,.18)', 'stroke-width': 10, 'stroke-linecap': 'round' }));
+
+  const waste = [[0,0],[160,0],[142,200],[118,400],[150,600],[122,800],[162,1000],[0,1000]];
+  terrainLayer.appendChild(svg('path', { d: polyPath(waste), fill: 'url(#waste-grad)' }));
+
+  const wl = svg('text', { x: 62, y: 500, fill: 'rgba(255,190,140,.13)', 'font-size': 34, 'font-weight': 900, 'font-family': 'Courier New', 'text-anchor': 'middle', transform: 'rotate(-90 62 500)' });
+  wl.textContent = 'ПУСТОШЬ'; terrainLayer.appendChild(wl);
+
+  const ol = svg('text', { x: 936, y: 500, fill: 'rgba(0,229,255,.13)', 'font-size': 34, 'font-weight': 900, 'font-family': 'Courier New', 'text-anchor': 'middle', transform: 'rotate(90 936 500)' });
+  ol.textContent = 'ОКЕАН'; terrainLayer.appendChild(ol);
+}
+
+function buildGround(){
+  const d = polyPath(CITY);
+  document.getElementById('city-clip-path').setAttribute('d', d);
+  groundLayer.appendChild(svg('path', { d, fill: '#0b0d12' }));
+}
+
+function buildSectors(){
+  cells.forEach((poly, i) => {
+    const id = i + 1;
+    let color = sectorColors.upper[id] || '#1a1410';
+    
+    const path = svg('path', { d: cellPath(poly), fill: color, 'fill-opacity': 0.6, class: 'sector', 'data-id': id });
+    path.addEventListener('click', (e) => { e.stopPropagation(); selectSector(id); });
+    sectorsLayer.appendChild(path);
+  });
+}
+
+function buildGangIcons(){
+  // Вспомогательная функция для темной подложки
+  const iconBg = (x, y) => svg('circle', { cx: x, cy: y, r: 35, fill: 'rgba(5, 6, 8, 0.85)', stroke: 'rgba(255, 255, 255, 0.15)', 'stroke-width': 1.5 });
+
+  // 1 - Сетевые Дьяволы (Сектор 1) - Череп с молнией
+  const c1x = 630, c1y = 370;
+  gangIconsLayer.appendChild(iconBg(c1x, c1y));
+  const g1 = svg('g', { transform: `translate(${c1x}, ${c1y}) scale(1.8)`, fill: 'none', stroke: '#00e5ff', 'stroke-width': 2.5, filter: 'drop-shadow(0 0 5px #00e5ff)' });
+  g1.appendChild(svg('circle', { cx:0, cy:0, r:15 }));
+  g1.appendChild(svg('path', { d: 'M -8 -5 L 0 10 L 8 -5' }));
+  g1.appendChild(svg('path', { d: 'M -15 0 L 15 0' }));
+  gangIconsLayer.appendChild(g1);
+
+  // 6 - Демонические Ружья (Сектор 6) - Прицел с рогами
+  const c6x = 630, c6y = 610;
+  gangIconsLayer.appendChild(iconBg(c6x, c6y));
+  const g6 = svg('g', { transform: `translate(${c6x}, ${c6y}) scale(1.8)`, fill: 'none', stroke: '#ff4444', 'stroke-width': 2.5, filter: 'drop-shadow(0 0 5px #ff4444)' });
+  g6.appendChild(svg('circle', { cx:0, cy:0, r:12 }));
+  g6.appendChild(svg('path', { d: 'M 0 -20 L 0 -12 M 0 12 L 0 20 M -20 0 L -12 0 M 12 0 L 20 0' }));
+  g6.appendChild(svg('path', { d: 'M -12 -12 L -20 -20 M 12 -12 L 20 -20' }));
+  gangIconsLayer.appendChild(g6);
+
+  // 12 - Якудза (Сектор 12) - Ворота Тории
+  const c12x = 700, c12y = 710;
+  gangIconsLayer.appendChild(iconBg(c12x, c12y));
+  const g12 = svg('g', { transform: `translate(${c12x}, ${c12y}) scale(1.8)`, fill: 'none', stroke: '#ff0055', 'stroke-width': 2.5, filter: 'drop-shadow(0 0 5px #ff0055)' });
+  g12.appendChild(svg('path', { d: 'M -15 -10 Q 0 -15 15 -10' }));
+  g12.appendChild(svg('path', { d: 'M -12 -5 L 12 -5' }));
+  g12.appendChild(svg('path', { d: 'M -10 -5 L -10 15 M 10 -5 L 10 15' }));
+  gangIconsLayer.appendChild(g12);
+
+  // 13 - Отшелушенные Собаки (Сектор 13) - Ошейник с шипами
+  const c13x = 60, c13y = 300;
+  gangIconsLayer.appendChild(iconBg(c13x, c13y));
+  const g13 = svg('g', { transform: `translate(${c13x}, ${c13y}) scale(1.8)`, fill: 'none', stroke: '#a08a6a', 'stroke-width': 2.5, filter: 'drop-shadow(0 0 5px #a08a6a)' });
+  g13.appendChild(svg('ellipse', { cx:0, cy:0, rx:15, ry:8 }));
+  g13.appendChild(svg('path', { d: 'M -10 -8 L -12 -14 M 0 -8 L 0 -15 M 10 -8 L 12 -14 M -10 8 L -12 14 M 0 8 L 0 15 M 10 8 L 12 14' }));
+  gangIconsLayer.appendChild(g13);
+
+  // 15 - ARC (Сектор 15) - Компас
+  const c15x = 75, c15y = 680;
+  gangIconsLayer.appendChild(iconBg(c15x, c15y));
+  const g15 = svg('g', { transform: `translate(${c15x}, ${c15y}) scale(1.8)`, fill: 'none', stroke: '#2ecc71', 'stroke-width': 2.5, filter: 'drop-shadow(0 0 5px #2ecc71)' });
+  g15.appendChild(svg('circle', { cx:0, cy:0, r:12 }));
+  g15.appendChild(svg('path', { d: 'M 0 -15 L 4 -4 L 15 0 L 4 4 L 0 15 L -4 4 L -15 0 L -4 -4 Z' }));
+  gangIconsLayer.appendChild(g15);
+}
+
+function buildBuildings(){
+  const g = svg('g', { 'clip-path': 'url(#city-clip)' });
+  buildingsLayer.appendChild(g);
+
+  cells.forEach((poly, i) => {
+    const [x0, y0, x1, y1] = polyBounds(poly);
+    const area = polyArea(poly);
+    const density = i > 11 ? 1500 : 900;
+    const count = Math.round(Math.min(100, Math.max(10, area / density)));
+    let placed = 0, attempts = 0;
+
+    while (placed < count && attempts < count * 10){
+      attempts++;
+      const pt = [R(x0, x1), R(y0, y1)];
+      if (!inPoly(pt, poly) || distToPolyEdge(pt, poly) < 18 || distToPolyline(pt, RIVER) < 22 || Math.hypot(pt[0] - CX, pt[1] - CY) < 116) continue;
+
+      const w = R(8, 22), h = R(8, 22);
+      g.appendChild(svg('rect', {
+        x: (-w / 2).toFixed(1), y: (-h / 2).toFixed(1), width: w.toFixed(1), height: h.toFixed(1),
+        rx: 1, fill: '#ffffff', opacity: 0.08,
+        transform: `translate(${pt[0].toFixed(1)},${pt[1].toFixed(1)}) rotate(${R(0, 45).toFixed(1)})`
+      }));
+      placed++;
+    }
+  });
+}
+
+function buildMetro(){
+  const lines = [
+    { id: 'l1', color: '#00e5ff', path: 'M 500 100 L 500 900' },
+    { id: 'l2', color: '#e056fd', path: 'M 100 500 L 900 500' },
+    { id: 'l3', color: '#f1c40f', path: 'M 250 250 L 750 750' },
+    { id: 'l4', color: '#e67e22', path: 'M 250 750 L 750 250' },
+    { id: 'ring', color: '#2ecc71', path: 'M 500 250 L 750 500 L 500 750 L 250 500 Z' }
+  ];
+
+  lines.forEach(line => {
+    metroLayer.appendChild(svg('path', { d: line.path, class: 'metro-line-bg' }));
+    metroLayer.appendChild(svg('path', { d: line.path, class: 'metro-line', stroke: line.color }));
+  });
+
+  const stations = [
+    [500, 200], [500, 300], [500, 700], [500, 800],
+    [200, 500], [300, 500], [700, 500], [800, 500],
+    [300, 300], [700, 700],
+    [300, 700], [700, 300],
+    [500, 250], [750, 500], [500, 750], [250, 500]
+  ];
+
+  stations.forEach(([x, y]) => metroLayer.appendChild(svg('circle', { cx: x, cy: y, r: 4.5, class: 'station' })));
+
+  const hubs = [
+    [500, 500],
+    [500, 250], [750, 500], [500, 750], [250, 500],
+    [250, 250], [750, 750], [250, 750], [750, 250]
+  ];
+
+  hubs.forEach(([x, y]) => metroLayer.appendChild(svg('circle', { cx: x, cy: y, r: 7, class: 'station-hub' })));
+}
+
+function buildCore(){
+  coreLayer.appendChild(svg('circle', { cx: CX, cy: CY, r: 86, fill: 'rgba(212,163,36,.06)' }));
+  coreLayer.appendChild(svg('circle', { cx: CX, cy: CY, r: 66, fill: '#0b0d12', stroke: '#d4a324', 'stroke-width': 2.5, filter: 'url(#glow)' }));
+  coreLayer.appendChild(svg('circle', { cx: CX, cy: CY, r: 46, fill: '#d4a324', filter: 'url(#glow)' }));
+  const t1 = svg('text', { x: CX, y: CY - 3, fill: '#111', 'font-size': 17, 'font-weight': 900, 'text-anchor': 'middle', 'letter-spacing': 1 });
+  t1.textContent = 'ЯДРО'; coreLayer.appendChild(t1);
+  const t2 = svg('text', { x: CX, y: CY + 15, fill: '#3a2c07', 'font-size': 9, 'font-weight': 700, 'text-anchor': 'middle' });
+  t2.textContent = 'источник'; coreLayer.appendChild(t2);
+}
+
+function buildLabels(){
+  cells.forEach((poly, i) => {
+    const [x0, y0, x1, y1] = polyBounds(poly);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+
+    const label = svg('text', { x: cx, y: cy, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, 'letter-spacing': 3, fill: 'rgba(255,255,255,.30)', stroke: 'rgba(0,0,0,.75)', 'stroke-width': 3, 'paint-order': 'stroke', 'stroke-linejoin': 'round' });
+    label.textContent = 'СЕКТОР ' + (i + 1);
+    labelsLayer.appendChild(label);
+
+    const corpName = sectorData[i + 1].corp.toUpperCase();
+    const fontSize = corpName.length > 14 ? 6 : 8;
+
+    const sub = svg('text', { x: cx, y: cy + 15, 'text-anchor': 'middle', 'font-size': fontSize, 'font-weight': 600, 'letter-spacing': 1, fill: 'rgba(255,255,255,.16)', stroke: 'rgba(0,0,0,.7)', 'stroke-width': 3, 'paint-order': 'stroke', 'stroke-linejoin': 'round' });
+    sub.textContent = corpName;
+    labelsLayer.appendChild(sub);
+  });
+}
+
+function drawPOIs(sectorId){
+  poiLayer.innerHTML = '';
+  if (currentLayer === 'cyber') return;
+
+  const poly = cells[sectorId - 1];
+  const [x0, y0, x1, y1] = polyBounds(poly);
+  const ccx = (x0 + x1) / 2, ccy = (y0 + y1) / 2;
+  const maxR = Math.max(x1 - x0, y1 - y0) * 0.55;
+
+  const selected = POI_DATA[currentLayer][sectorId];
+  if (!selected) return;
+
+  const positions = [];
+  selected.forEach(shop => {
+    let pos = null;
+    for (let a = 0; a < 240 && !pos; a++){
+      const ang = R(0, Math.PI * 2);
+      const rad = R(30, maxR);
+      const p = [ccx + Math.cos(ang) * rad, ccy + Math.sin(ang) * rad];
+
+      if (!inPoly(p, poly) || distToPolyEdge(p, poly) < 34 || distToPolyline(p, RIVER) < 28 || Math.hypot(p[0] - CX, p[1] - CY) < 100) continue;
+      if (positions.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 58)) continue;
+
+      pos = p;
+    }
+    if (pos) positions.push(pos);
+  });
+
+  positions.forEach((pos, i) => {
+    const num = i + 1;
+    const shop = selected[i];
+    const markerColor = currentLayer === 'upper' ? '#d4a324' : '#a35d1c'; 
+
+    const g = svg('g', { class: 'poi-marker', transform: `translate(${pos[0].toFixed(1)}, ${pos[1].toFixed(1)})`, style: `animation-delay:${i * 0.07}s` });
+
+    g.appendChild(svg('circle', { r: 16, fill: 'none', stroke: markerColor, 'stroke-width': 1.2, class: 'pulse' }));
+    g.appendChild(svg('circle', { r: 13, fill: markerColor, stroke: '#0b0c10', 'stroke-width': 2.5 }));
+
+    const t = svg('text', { x: 0, y: 1, fill: '#111', 'font-size': 12, 'font-weight': 900, 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+    t.textContent = num;
+    g.appendChild(t);
+
+    const lab = svg('text', { x: 0, y: 27, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: currentLayer === 'upper' ? '#e9dfc4' : '#c9b59a', stroke: '#08090c', 'stroke-width': 3.5, 'paint-order': 'stroke', 'stroke-linejoin': 'round' });
+    lab.textContent = shop.name;
+    g.appendChild(lab);
+
+    poiLayer.appendChild(g);
+  });
+
+  window.currentPOIs = positions.map((p, i) => ({ ...selected[i], pos: p, num: i + 1 }));
+}
+
+/* ==========================================================
+   КАМЕРА
+   ========================================================== */
+let vb = { x: 0, y: 500, w: 10000, h: 9000 };
+let isDragging = false;
+let clickStart = { x: 0, y: 0 };
+let startMouse = { x: 0, y: 0 };
+let startVB = { x: 0, y: 0 };
+let animId = null;
+
+function applyViewBox() {
+  if (animId) cancelAnimationFrame(animId);
+  svgEl.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+}
+
+function animateViewBox(targetX, targetY, targetW, targetH, duration = 800) {
+  if (animId) cancelAnimationFrame(animId);
+  
+  const startX = vb.x, startY = vb.y, startW = vb.w, startH = vb.h;
+  const startTime = performance.now();
+
+  function step(time) {
+    const progress = Math.min((time - startTime) / duration, 1);
+    const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    
+    vb.x = startX + (targetX - startX) * ease;
+    vb.y = startY + (targetY - startY) * ease;
+    vb.w = startW + (targetW - startW) * ease;
+    vb.h = startH + (targetH - startH) * ease;
+    
+    applyViewBox();
+    
+    if (progress < 1) {
+      animId = requestAnimationFrame(step);
+    } else {
+      animId = null;
+    }
+  }
+  animId = requestAnimationFrame(step);
+}
+
+const mapContainer = document.getElementById('map-container');
+
+// Зум колесиком
+mapContainer.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+
+  const rect = mapContainer.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  const svgMouseX = vb.x + (mouseX / rect.width) * vb.w;
+  const svgMouseY = vb.y + (mouseY / rect.height) * vb.h;
+
+  const zoomIntensity = 0.001;
+  const wheel = e.deltaY < 0 ? 1 : -1;
+  const zoom = Math.exp(wheel * zoomIntensity * 10);
+  
+  let newW = vb.w * zoom;
+  let newH = vb.h * zoom;
+
+  newW = Math.max(1000, Math.min(30000, newW));
+  newH = Math.max(1300, Math.min(39000, newH));
+
+  vb.x = svgMouseX - (mouseX / rect.width) * newW;
+  vb.y = svgMouseY - (mouseY / rect.height) * newH;
+  vb.w = newW;
+  vb.h = newH;
+  
+  applyViewBox();
+}, { passive: false });
+
+// Перетаскивание и клик
+mapContainer.addEventListener('mousedown', (e) => {
+  if (e.target.closest('.layer-switch') || e.target.closest('#info-panel') || e.target.closest('#back-btn')) return;
+  isDragging = true;
+  clickStart = { x: e.clientX, y: e.clientY };
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  startMouse = { x: e.clientX, y: e.clientY };
+  startVB = { x: vb.x, y: vb.y };
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const rect = mapContainer.getBoundingClientRect();
+  const dx = (e.clientX - startMouse.x) * (vb.w / rect.width);
+  const dy = (e.clientY - startMouse.y) * (vb.h / rect.height);
+  
+  vb.x = startVB.x - dx;
+  vb.y = startVB.y - dy;
+  applyViewBox();
+});
+
+window.addEventListener('mouseup', () => {
+  isDragging = false;
+});
+
+// КЛИК ПО ПУСТОМУ МЕСТУ
+mapContainer.addEventListener('click', (e) => {
+  if (e.target.closest('.layer-switch') || e.target.closest('#info-panel') || e.target.closest('#back-btn')) return;
+  const dist = Math.hypot(e.clientX - clickStart.x, e.clientY - clickStart.y);
+  if (dist > 5) return; 
+
+  if (activeSector || document.getElementById('info-panel').classList.contains('show')) {
+    resetView();
+  }
+});
+
+/* ==========================================================
+   УПРАВЛЕНИЕ
+   ========================================================== */
+document.getElementById('cyber-zone').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.querySelectorAll('.sector').forEach(el => el.classList.remove('active', 'dimmed'));
+  activeSector = null;
+  showCybernetInfo();
+});
+
+document.getElementById('black-curtain').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.querySelectorAll('.sector').forEach(el => el.classList.remove('active', 'dimmed'));
+  activeSector = null;
+  showCurtainInfo();
+});
+
+function selectSector(id){
+  activeSector = id;
+
+  document.querySelectorAll('.sector').forEach(el => {
+    const sid = +el.dataset.id;
+    el.classList.toggle('active', sid === id);
+    el.classList.toggle('dimmed', sid !== id);
+  });
+
+  const poly = cells[id - 1];
+  const [x0, y0, x1, y1] = polyBounds(poly);
+  
+  const cx = ((x0 + x1) / 2) * 10;
+  const cy = (((y0 + y1) / 2) - 50) * 10; 
+  
+  const targetW = 5000;
+  const targetH = 5000;
+  
+  animateViewBox(cx - targetW/2, cy - targetH/2, targetW, targetH);
+
+  drawPOIs(id);
+  showPanel(id);
+  
+  document.getElementById('back-btn').classList.add('show');
+  document.getElementById('hint').style.display = 'none';
+}
+
+function resetView(){
+  activeSector = null;
+  animateViewBox(0, 500, 10000, 9000);
+
+  poiLayer.innerHTML = '';
+  document.querySelectorAll('.sector').forEach(el => el.classList.remove('active', 'dimmed'));
+  document.getElementById('info-panel').classList.remove('show');
+  document.getElementById('back-btn').classList.remove('show');
+  document.getElementById('hint').style.display = 'block';
+}
+
+function showCodex(){
+  const panel = document.getElementById('info-panel');
+  
+  let html = `<h2 style="margin:0 0 15px;font-size:24px;color:#ff8c00; text-shadow: 0 0 10px rgba(255,140,0,0.5);">КОДЕКС</h2>`;
+  
+  html += `<h3 style="font-size:14px;color:#ff4444; margin:20px 0 10px; border-bottom: 1px solid #ff4444; padding-bottom:4px;">🚫 ТАБУ МЕГАПОЛИСА-12</h3>`;
+  html += `<p style="font-size:11px;color:#ff8888; margin-bottom:15px; font-weight:bold;">Нарушение = смерть. Статус «Топливо».</p>`;
+
+  const taboos = [
+    { title: "Контроль мыслей", text: "Запрещены скрытые подсети, глушилки и шифрование мыслей." },
+    { title: "Импланты", text: "Только по патентам Central Core Architecture. Нелегальные аугменты сжигают нейросеть." },
+    { title: "Противодействие Силе", text: "Карается аннигиляцией: Арбитеры отключают сознание, Когти ликвидируют." },
+    { title: "Запрет эмпатии ИИ", text: "Синты со свободной волей вне закона. Создателям стирают личность." },
+    { title: "Утаивание топлива", text: "Трупы сдают в шахты Ядра. Сокрытие тела карается зачисткой." },
+    { title: "Единый культ", text: "Разрешено только Христианство. Утаивание праха = ересь." },
+    { title: "Чёрный заслон", text: "Находиться внутри запрещено. Моментальная смерть." }
+  ];
+
+  taboos.forEach(t => {
+    html += `<div class="law-box">
+      <h4>${t.title}</h4>
+      <p>${t.text}</p>
+    </div>`;
+  });
+
+  html += `<h3 style="font-size:14px;color:#2ecc71; margin:30px 0 10px; border-bottom: 1px solid #2ecc71; padding-bottom:4px;">⚖️ ЗАКОНЫ ВЕРХНЕГО ЯРУСА</h3>`;
+  html += `<p style="font-size:11px;color:#88ff88; margin-bottom:15px; font-weight:bold;">Нарушение не карается смертью — но свободы лишает быстро.</p>`;
+
+  // Убрана "Жёсткая миграция"
+  const upperLaws = [
+    { title: "Оборот оружия", text: "Разрешён только огнестрел. Оружие будущего (рейлганы, лазерное) запрещено." },
+    { title: "Подделка ID", text: "Конфискация, допрос Арбитерами, при отягчающих — каторга." },
+    { title: "Трудовой контракт", text: "Сотрудник принадлежит корпорации. Разрыв — статус «расходник», депортация." },
+    { title: "Несанкционированные собрания", text: "Протесты без разрешения Corp M — разгон, арест зачинщиков." }
+  ];
+
+  upperLaws.forEach(l => {
+    html += `<div class="law-box upper-law-box">
+      <h4>${l.title}</h4>
+      <p>${l.text}</p>
+    </div>`;
+  });
+
+  panel.innerHTML = html;
+  panel.classList.add('show');
+}
+
+function showPanel(id){
+  const info = sectorData[id];
+  const tierName = currentLayer === 'upper' ? 'Гнёзда' : (currentLayer === 'lower' ? 'Подворотни' : 'Киберсеть');
+  const panel = document.getElementById('info-panel');
+
+  let html = `<h2 style="margin:0 0 5px;font-size:22px;color:#fff">${info.name}</h2>`;
+  html += `<span style="color:#d4a324;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;">${tierName} · ${info.corp}</span>`;
+  
+  html += `<p style="color:#a0a2a8;font-size:13px;line-height:1.6;margin:15px 0 20px;">${info.lore}</p>`;
+
+  if (currentLayer === 'upper' || currentLayer === 'lower') {
+    html += `<div style="background:rgba(0,0,0,0.3); padding:10px; border-radius:4px; border-left:3px solid #2ecc71; margin-bottom:20px;">
+      <span style="font-size:10px; color:#2ecc71; text-transform:uppercase; letter-spacing:1px; font-weight:bold;">Физическая защита:</span>
+      <p style="font-size:12px; color:#e0e0e0; margin:3px 0 0 0;">${info.physicalProt}</p>
+    </div>`;
+  } else if (currentLayer === 'cyber') {
+    html += `<div style="background:rgba(0,0,0,0.3); padding:10px; border-radius:4px; border-left:3px solid #ff4444; margin-bottom:10px;">
+      <span style="font-size:10px; color:#ff4444; text-transform:uppercase; letter-spacing:1px; font-weight:bold;">Уязвимость (Сеть):</span>
+      <p style="font-size:12px; color:#e0e0e0; margin:3px 0 0 0;">${info.cyberVuln}</p>
+    </div>`;
+    
+    html += `<div style="background:rgba(0,0,0,0.3); padding:10px; border-radius:4px; border-left:3px solid #00e5ff; margin-bottom:20px;">
+      <span style="font-size:10px; color:#00e5ff; text-transform:uppercase; letter-spacing:1px; font-weight:bold;">Защита (Сеть):</span>
+      <p style="font-size:12px; color:#e0e0e0; margin:3px 0 0 0;">${info.cyberProt}</p>
+    </div>`;
+  }
+
+  if (currentLayer !== 'cyber') {
+    html += `<h3 style="font-size:10px;color:#e5c07b;letter-spacing:2px;text-transform:uppercase;margin:0 0 10px;border-bottom:1px solid #333;padding-bottom:4px;">Обнаруженные объекты</h3>`;
+    html += `<ul style="list-style:none;padding:0;margin:0;">`;
+
+    if (window.currentPOIs.length === 0) {
+      html += `<li style="color:#666;font-size:12px;padding:10px 0;">Нет доступных точек.</li>`;
+    } else {
+      window.currentPOIs.forEach(poi => {
+        html += `<li style="padding:10px 0;border-bottom:1px solid #24272f;font-size:13px;color:#c1c2c5;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="background:${currentLayer === 'upper' ? '#d4a324' : '#a35d1c'};color:#111;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;flex-shrink:0;">${poi.num}</span>
+            <b>${poi.icon} ${poi.name}</b>
+          </div>
+        </li>`;
+      });
+    }
+    html += `</ul>`;
+  }
+  
+  panel.innerHTML = html;
+  panel.classList.add('show');
+}
+
+function showCybernetInfo() {
+  const panel = document.getElementById('info-panel');
+  let html = `<h2 style="margin:0 0 5px;font-size:22px;color:#d902ee; text-shadow: 0 0 10px rgba(217,2,238,0.5);">КИБЕРСЕТЬ</h2>`;
+  html += `<span style="color:#d902ee;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;">Глобальный цифровой слой</span>`;
+  
+  html += `<p style="color:#a0a2a8;font-size:13px;line-height:1.6;margin:15px 0 20px;">
+    Место для Нетраннеров, любителей шарить в сети, взламывать и познавать неизведанное. Но стоит опасаться одного места в сети: Чёрного заслона. Место, где хранятся дикие искины, пытающиеся пробить заслон.
+  </p>`;
+
+  html += `<div style="background:rgba(0,0,0,0.3); padding:10px; border-radius:4px; border-left:3px solid #ff4444; margin-bottom:10px;">
+      <span style="font-size:10px; color:#ff4444; text-transform:uppercase; letter-spacing:1px; font-weight:bold;">Уязвимость:</span>
+      <p style="font-size:12px; color:#e0e0e0; margin:3px 0 0 0;">Дикие искины из Океана и Чёрного заслона, пытающиеся прорваться в город. Перегрузка узлов.</p>
+  </div>`;
+  
+  html += `<div style="background:rgba(0,0,0,0.3); padding:10px; border-radius:4px; border-left:3px solid #00e5ff; margin-bottom:20px;">
+      <span style="font-size:10px; color:#00e5ff; text-transform:uppercase; letter-spacing:1px; font-weight:bold;">Защита:</span>
+      <p style="font-size:12px; color:#e0e0e0; margin:3px 0 0 0;">Архитектор, Корп C, патрулирование сети и Чёрный заслон.</p>
+  </div>`;
+  panel.innerHTML = html;
+  panel.classList.add('show');
+}
+
+function showCurtainInfo() {
+  const panel = document.getElementById('info-panel');
+  let html = `<h2 style="margin:0 0 5px;font-size:22px;color:#ff0000; text-shadow: 0 0 10px red;">ЧЁРНЫЙ ЗАСЛОН</h2>`;
+  html += `<p style="color:#ffcccc;font-size:14px;line-height:1.6;margin:15px 0; font-weight:bold;">За чёрным заслоном только лишь смерть.</p>`;
+  html += `<p style="color:#a0a2a8;font-size:12px; line-height:1.5;">
+    Зона абсолютного отсутствия сигнала. Все процессы, входящие в этот сектор, мгновенно уничтожаются. Никто не возвращался отсюда с работающим сознанием. Говорят, там обитают самые сильные искины, так и не попавшие в город.
+  </p>`;
+  panel.innerHTML = html;
+  panel.classList.add('show');
+}
+
+function setLayer(layer, btn){
+  currentLayer = layer;
+  document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  const visual = document.getElementById('city-visual');
+  const metroLines = document.querySelectorAll('.metro-line');
+  const sectors = document.querySelectorAll('.sector');
+  const cyberZone = document.getElementById('cyber-zone');
+  const blackCurtain = document.getElementById('black-curtain');
+
+  if (layer === 'upper'){
+    visual.style.filter = 'none';
+    cyberZone.style.display = 'none';
+    blackCurtain.style.display = 'none';
+    sectors.forEach(el => {
+      let color = sectorColors.upper[el.dataset.id] || '#1a1410';
+      el.setAttribute('fill', color);
+      el.style.fillOpacity = '0.6';
+    });
+    metroLines.forEach(el => el.style.opacity = '1');
+    
+    animateViewBox(0, 500, 10000, 9000);
+    
+    if (activeSector) showPanel(activeSector);
+    else document.getElementById('info-panel').classList.remove('show');
+
+  } else if (layer === 'lower') {
+    visual.style.filter = 'brightness(0.5) contrast(1.2) saturate(0.5)';
+    cyberZone.style.display = 'none';
+    blackCurtain.style.display = 'none';
+    sectors.forEach(el => {
+      let color = sectorColors.lower[el.dataset.id] || '#0a0806';
+      el.setAttribute('fill', color);
+      el.style.fillOpacity = '0.6';
+    });
+    metroLines.forEach(el => el.style.opacity = '0.6');
+    
+    animateViewBox(0, 500, 10000, 9000);
+
+    if (activeSector) showPanel(activeSector);
+    else document.getElementById('info-panel').classList.remove('show');
+
+  } else if (layer === 'cyber') {
+    visual.style.filter = 'hue-rotate(45deg) brightness(0.3) contrast(1.5)';
+    cyberZone.style.display = 'block';
+    blackCurtain.style.display = 'block';
+    sectors.forEach(el => {
+      el.setAttribute('fill', '#000000');
+      el.style.fillOpacity = '0.8';
+    });
+    metroLines.forEach(el => el.style.opacity = '0.1');
+    
+    animateViewBox(0, 7500, 10000, 5500);
+    
+    showCybernetInfo();
+    activeSector = null;
+    document.querySelectorAll('.sector').forEach(el => el.classList.remove('active', 'dimmed'));
+  }
+}
+
+/* ==========================================================
+   ЗАПУСК
+   ========================================================== */
+buildTerrain();
+buildGround();
+buildSectors();
+buildGangIcons(); // Иконки банд
+buildBuildings();
+buildMetro();
+buildCore();
+buildLabels();
+
+buildingsLayer.style.opacity = '0';
+requestAnimationFrame(() => {
+  buildingsLayer.style.transition = 'opacity 1s ease';
+  buildingsLayer.style.opacity = '1';
+});
+
+applyViewBox();
+setLayer('upper', document.querySelector('.layer-btn.active'));
+</script>
+</body>
+</html>
